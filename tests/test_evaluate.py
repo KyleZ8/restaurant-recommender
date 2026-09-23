@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from recsys.evaluate import catalog_coverage, rmse, topk_hit_rate_and_coverage
+from recsys.evaluate import catalog_coverage, rmse, topk_hit_rate_and_coverage, user_level_hit_rate
 
 
 def test_rmse_known_answer() -> None:
@@ -48,3 +48,14 @@ def test_catalog_coverage_known_answer() -> None:
     recs = pd.DataFrame({"item_idx": [1, 2, 2, 4]})
 
     assert catalog_coverage(recs, n_items=10) == 0.3
+
+
+def test_user_level_hit_rate_is_a_proportion_not_row_rate() -> None:
+    recs = pd.DataFrame(
+        {
+            "user_idx": [0, 0, 0, 1, 1, 1],
+            "is_test_hit": [1, 1, 0, 0, 0, 0],
+        }
+    )
+
+    assert user_level_hit_rate(recs) == 0.5

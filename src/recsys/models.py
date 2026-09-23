@@ -22,14 +22,15 @@ class PopularityBaseline:
     def fit(self, train: pd.DataFrame) -> PopularityBaseline:
         self.global_mean_ = float(train["stars"].mean())
         self.item_mean_ = train.groupby("item_idx")["stars"].mean()
+        self.item_count_ = train.groupby("item_idx").size()
         return self
 
     def predict(self, user_idx: np.ndarray, item_idx: np.ndarray) -> np.ndarray:
         return self.item_mean_.reindex(item_idx).fillna(self.global_mean_).to_numpy()
 
     def score_all_items(self, user_idx: int, n_items: int) -> np.ndarray:
-        scores = np.full(n_items, self.global_mean_)
-        scores[self.item_mean_.index.to_numpy()] = self.item_mean_.to_numpy()
+        scores = np.zeros(n_items, dtype=float)
+        scores[self.item_count_.index.to_numpy()] = self.item_count_.to_numpy(dtype=float)
         return scores
 
 
@@ -213,12 +214,14 @@ class MatrixFactorizationSGD:
         if user_idx not in self.train_users_:
             return self.item_mean_.reindex(np.arange(n)).fillna(self.global_mean_).to_numpy()
         item_factors = self.item_factors_[:n]
-        scores = (
-            self.global_mean_
-            + self.user_bias_[user_idx]
-            + self.item_bias_[:n]
-            + item_factors @ self.user_factors_[user_idx]
-        )
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            scores = (
+                self.global_mean_
+                + self.user_bias_[user_idx]
+                + self.item_bias_[:n]
+                + item_factors @ self.user_factors_[user_idx]
+            )
+        scores = np.nan_to_num(scores, nan=self.global_mean_, posinf=5.0, neginf=1.0)
         unseen_items = np.array([i not in self.train_items_ for i in range(n)])
         if unseen_items.any():
             scores[unseen_items] = self.global_mean_
