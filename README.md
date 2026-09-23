@@ -4,15 +4,17 @@
 
 ## Headline Decision
 
-Ship **matrix factorization for warm users only**, with a **popularity fallback for new users and new restaurants**, and validate it online before broad rollout. On the executed modeling sample, matrix factorization has the best RMSE (**1.4020**) and highest catalog coverage (**1.44%**), but hit rate@10 is **0.0%** for every offline model, so this should launch as a guarded A/B test rather than a blanket replacement.
+Ship **matrix factorization for warm users only**, with a **popularity fallback for new users and new restaurants**, and validate it online before broad rollout. On a deterministic **5,000-user** Yelp evaluation sample that keeps every selected user's reviews, matrix factorization has the best RMSE (**1.2142**) and the only nonzero hit rate@10 (**3.0%**), but it sends **72.3%** of recommendation slots to the top 10% most-reviewed restaurants, so discovery diversity needs an explicit launch guardrail.
 
 ## Model Comparison
 
 | Model | RMSE | Hit rate@10 | Catalog coverage | Decision |
 |---|---:|---:|---:|---|
-| Matrix factorization | 1.4020 | 0.0% | 1.44% | Ship to users with enough history, behind an experiment. |
-| Popularity | 1.4046 | 0.0% | 0.73% | Use as cold-start fallback. |
-| Item-based CF | 1.4617 | 0.0% | 1.10% | Do not ship; weaker accuracy without enough discovery lift. |
+| Matrix factorization | 1.2142 | 3.0% | 1.12% | Ship to users with enough history, behind an experiment. |
+| Popularity | 1.2976 | 0.0% | 3.84% | Use as cold-start fallback. |
+| Item-item CF | 1.3139 | 0.0% | 5.74% | Do not ship; more discovery but weaker accuracy and no hits. |
+
+Evaluation uses a deterministic user-level sample from the 5-core filtered Yelp table: **5,000 users**, **67,657 reviews**, **8,200 restaurants**, **13.53 ratings/user**, and **8.25 ratings/restaurant**. This keeps collaborative-filtering density intact instead of thinning the data with a random row sample.
 
 ![Model comparison](reports/figures/model_comparison.png)
 
@@ -20,21 +22,21 @@ Ship **matrix factorization for warm users only**, with a **popularity fallback 
 
 | Segment | Best model | RMSE | Hit rate@10 | Coverage |
 |---|---|---:|---:|---:|
-| Casual users | Popularity | 1.4766 | 0.0% | 0.34% |
-| Power users | Matrix factorization | 1.3723 | 0.0% | 1.42% |
-| High-popularity restaurants | Matrix factorization | 1.3104 | 0.0% | 0.87% |
-| Low-popularity restaurants | Popularity | 1.4223 | 0.0% | 0.07% |
-| Medium-popularity restaurants | Popularity | 1.5375 | 0.0% | 0.51% |
+| Casual users | Matrix factorization | 1.3880 | 0.03% | 0.29% |
+| Power users | Matrix factorization | 1.1439 | 0.03% | 1.12% |
+| High-popularity restaurants | Matrix factorization | 1.1355 | 0.05% | 1.52% |
+| Low-popularity restaurants | Matrix factorization | 1.4346 | 0.00% | 0.44% |
+| Medium-popularity restaurants | Matrix factorization | 1.3212 | 0.00% | 0.56% |
 
 ![Segment hit rate](reports/figures/segment_hit_rate.png)
 
-Cold-start is the failure mode: for new restaurants, popularity RMSE is **1.2398** versus **1.4503** for the personalized models. For warm users, matrix factorization improves RMSE to **1.2983** versus **1.3928** for popularity.
+Cold-start is the failure mode: for new users, all models fall back to the same no-history estimate (**1.2428** RMSE). For warm users, matrix factorization improves RMSE to **1.1885** versus **1.3103** for popularity.
 
 ## Popularity Bias
 
 ![Popularity bias](reports/figures/popularity_bias.png)
 
-Matrix factorization sends **19.6%** of recommendation slots to the top 10% most-reviewed restaurants, compared with **17.4%** for popularity and item-based CF. That concentration is a guardrail risk: the model improves warm-user RMSE, but it may still narrow discovery toward already-visible restaurants.
+Matrix factorization sends **72.3%** of recommendation slots to the top 10% most-reviewed restaurants, compared with **0.8%** for item-item CF and **0.0%** for popularity in the evaluated top-10 lists. That concentration is the main guardrail risk: the model improves warm-user accuracy and ranking hits, but it can narrow discovery toward already-visible restaurants.
 
 ## How to Get the Data and Run
 
@@ -55,7 +57,8 @@ make test
 
 ## Limitations
 
-- Offline hit rate@10 is zero on the deterministic 20k-review modeling sample, so the ship decision depends on online validation, not offline ranking confidence.
+- The notebook evaluates a large deterministic user-level sample, not the full 398,432-row 5-core table, to keep local reruns fast while preserving user-history density.
+- Neural matrix factorization is out of scope for this portfolio run; the shipped comparison covers popularity, item-item collaborative filtering, and SGD matrix factorization.
 - The recommender uses explicit star ratings; it does not include session context, distance, open hours, cuisine filters, or text/image features.
 - New users and new restaurants need a fallback because collaborative signals are unavailable or sparse.
 - The real Yelp data and processed Parquet files are intentionally gitignored and must never be committed.
