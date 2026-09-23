@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from recsys.models import ItemBasedCF, MatrixFactorizationSGD
+from recsys.models import ItemBasedCF, MatrixFactorizationSGD, PopularityBaseline
 
 
 def _toy_ratings() -> pd.DataFrame:
@@ -53,3 +53,17 @@ def test_matrix_factorization_sgd_loss_decreases() -> None:
 
     assert len(model.loss_history_) == 8
     assert model.loss_history_[-1] < model.loss_history_[0]
+
+
+def test_popularity_baseline_ranks_by_training_volume() -> None:
+    train = pd.DataFrame(
+        {
+            "user_idx": [0, 1, 2, 3, 4],
+            "item_idx": [0, 1, 1, 1, 2],
+            "stars": [5.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+
+    scores = PopularityBaseline().fit(train).score_all_items(user_idx=0, n_items=3)
+
+    assert scores.tolist() == [1.0, 3.0, 1.0]

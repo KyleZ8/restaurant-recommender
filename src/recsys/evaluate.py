@@ -26,6 +26,18 @@ def catalog_coverage(
     return float(recommendations[item_col].nunique() / n_items)
 
 
+def user_level_hit_rate(
+    recommendations: pd.DataFrame,
+    user_col: str = "user_idx",
+    hit_col: str = "is_test_hit",
+) -> float:
+    """Share of evaluated users with at least one hit in their recommendation list."""
+    if recommendations.empty:
+        return 0.0
+    user_hits = recommendations.groupby(user_col)[hit_col].max()
+    return float(user_hits.mean())
+
+
 def topk_hit_rate_and_coverage(
     score_all_items_fn,
     train: pd.DataFrame,
